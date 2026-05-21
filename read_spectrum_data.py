@@ -423,7 +423,7 @@ def avg_diff_spectrum_data_from_files(file_cent,file_arm, use_fit=False, plot=Fa
     
     #fit to gaussian/find troughs
     env_cent, params_cent, xm_cent, ym_cent = fit_to_gaussian(x_cent,y_cent)
-    env_arm, params_arm, xm_arm, ym_arm = fit_to_gaussian(x_arm,y_arm,trough=False)
+    env_arm, params_arm, xm_arm, ym_arm = fit_to_gaussian(x_arm,y_arm,trough=False,skew=False)
         
     
     if use_fit== True:

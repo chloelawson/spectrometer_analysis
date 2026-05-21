@@ -57,7 +57,10 @@ def fit_to_gaussian(x, y, smooth_window=20, prominence=0.5,skew=False,trough=Tru
     
     Returns
     -------
-    
+    envelope:
+    params:
+    x_min:
+    y_min: 
     """
 
     if trough==True:
