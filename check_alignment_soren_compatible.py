@@ -16,116 +16,7 @@ from bisect import bisect_left
 import csv
 import random
 import math
-
-
-def read_photon_control_spectrum(filename):
-    """
-    Read a Photon Control spectrum file and return wavelength and intensity arrays.
-
-    Parameters
-    ----------
-    filename : str
-        Path to the spectrum file.
-
-    Returns
-    -------
-    wavelength : numpy.ndarray
-        Wavelength values.
-    intensity : numpy.ndarray
-        Intensity values.
-    """
-
-    try:
-        #Trye reading as an excel file, the test data was .xls but it was actually csv format
-        data_raw = pd.read_excel(
-            filename,
-            usecols=[0, 1],
-            skiprows=6,
-            header=None,
-            engine='xlrd')
-        data=data_raw.to_numpy()
-
-    except Exception:
-        #if excel format reading fails, read as csv 
-        data_raw = pd.read_csv(filename, sep="\t", skiprows=6)
-        data= data_raw.to_numpy()
-    
-    except Exception:
-        print("File cannot be read as excel or csv format")
-
-    wavelength = data[:, 0]
-    intensity = data[:, 1]
-
-    return wavelength, intensity
-
-def find_closest_index(value, array):
-    """
-    Return the index of the element in `array` closest to `value`.
-    """
-    array = np.asarray(array)
-    return np.abs(array - value).argmin()
-
-
-def elim_offset_photon_control_spectrum(x, y):
-    """
-    Remove offset from Photon Control spectrum data
-
-    Parameters
-    ----------
-    x: array Wavelength values.
-    y: array Intensity values.
-
-    Returns
-    -------
-    wavelength: numpy.ndarray, cropped wavelength range.
-    intensity: numpy.ndarray, offset-corrected intensity values
-    """
-
-    lambda_min = 740   # min of spectrometer (nm)
-    lambda_1 = 745     # intermediate value used to compute average offset
-    lambda_max = 860   # max of spectrometer
-
-    idx_min = find_closest_index(lambda_min, x)
-    idx_1 = find_closest_index(lambda_1, x)
-    idx_max = find_closest_index(lambda_max, x)
-
-    # MATLAB uses inclusive indexing, so add +1 to the upper bound
-    offset_intensity = np.mean(y[idx_min:idx_1 + 1])
-
-    wavelength = x[idx_min:idx_max + 1]
-    intensity = y[idx_min:idx_max + 1] - offset_intensity
-
-    return wavelength, intensity
-
-def plot_clean_data(filename,plot=False):
-    """
-    plots data from excel or csv file after removing offset from spectrometer
-    
-    Parameters
-    ----------
-    filename: Name of file if in same folder as code, otherwise full file path 
-    plot: True will produce a plot of the cleaned data, False will not make plot
-    
-    Returns
-    -------
-    wavelength: numpy.ndarray, cropped wavelength range.
-    intensity: numpy.ndarray, offset-corrected intensity values
-    
-    """
-    
-    wavelength_offset, intensity_offset = read_photon_control_spectrum(filename)
-    wavelength,intensity = elim_offset_photon_control_spectrum(wavelength_offset, intensity_offset)
-    
-    if plot==True:
-        plt.figure(figsize=(10,5))
-        plt.plot(wavelength,intensity)
-        plt.x_label('Wavelength(nm)')
-        plt.y_label("intensity arb.")
-        plt.show()
-    elif plot!=True:
-        pass
-    
-    return wavelength,intensity
+#from phase_control_essentials.spectrum import Spectrum 
 
 
 def gaussian(x, a, x0, sigma, c):
@@ -210,23 +101,15 @@ def fit_to_gaussian(x, y, smooth_window=20, prominence=0.5,skew=False,trough=Tru
 
     return envelope, params, x_min, y_min
 
-def estimated_envelope_from_file(filename,plot=False):
+def estimated_envelope_from_spectrum(spectrum_data: Spectrum, plot=False):
     """
-    Takes filename and estimates the bottom envelope, plots the data and returns fit data
-    
-    Parameters
-    ----------
-    filename: Name of file if in same folder as code, otherwise full file path 
-    plot: Boolean, True will produce a plot of the cleaned data, False will not make plot
-    
-    Returns
-    -------
-    env: 
-    params:
+    estimates gaussian envelope from spectrum data 
         
     """
     
-    x,y = plot_clean_data(filename,plot=False)
+    x = Spectrum.wavelengths
+    y= Spectrum.intensity
+    
     env, params, xm, ym = fit_to_gaussian(x,y)
 
     if plot==True:
@@ -392,34 +275,24 @@ def generate_test_data():
         
     return lam_array,ints_array
 
-def avg_diff_spectrum_data_from_files(file_cent,file_arm, use_fit=False, plot=False):
+def avg_diff_spectrum_data(cent_spectrum: Spectrum, amr_spectrum: Spectrum use_fit=False, plot=False, generate=False):
     """
     computes the average difference between two curves, does average because each data set is going 
     to have a different number of troughs that are found. 
 
-    Parameters
-    ----------
-    file_cent:
-    
-    file_arm:
-        
-    use_fit: Boolean, if True uses best fit skewed gaussian curves for the data sets
-
-    Returns
-    -------
-    None.
-
     """
     
     #get data for armrifuge
-    if file_arm == "generate":
+    if generate= True
         x_arm,y_arm=generate_test_data()
     
     else:
-        x_arm,y_arm = plot_clean_data(file_arm,plot=False)
+        x_arm = arm_spectrum.wavelengths
+        y_arm = arm_spectrum.intensity
 
     #get data from centillating signal
-    x_cent,y_cent = plot_clean_data(file_cent,plot=False)
+    x_cent= cent_spectrum.wavelengths
+    y_cent= cent_spectrum.intensity
     
     #fit to gaussian/find troughs
     env_cent, params_cent, xm_cent, ym_cent = fit_to_gaussian(x_cent,y_cent)
@@ -467,10 +340,9 @@ def avg_diff_spectrum_data_from_files(file_cent,file_arm, use_fit=False, plot=Fa
     return avg_diff(xm_cent,y_cent_clean,y_arm_matched)
 
 
+#diff= avg_diff_spectrum_data('test_data.xls','generate',use_fit=True,plot=True)
 
-diff= avg_diff_spectrum_data_from_files('test_data.xls','generate',use_fit=True,plot=True)
-
-print('average difference between curves =', round(diff,3))
+#print('average difference between curves =', round(diff,3))
 
 
 
