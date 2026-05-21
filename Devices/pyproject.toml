@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devices"  # beliebiger Paketname, hat nichts mit den Import-Namen zu tun
+version = "0.1.0"
+description = "Local drivers for the SPM-002 spectrometer and Elliptec waveplate"
+requires-python = ">=3.10"
+dependencies = []  # kannst du leer lassen, wir arbeiten mit _requirements_x32/_x64
+
+[tool.setuptools]
+packages = ["elliptec", "spm_002"]

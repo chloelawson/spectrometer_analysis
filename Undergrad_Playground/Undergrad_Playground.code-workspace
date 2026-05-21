@@ -1,0 +1,36 @@
+{
+  "folders": [
+    { "path": ".", "name": "Undergrad_Playground" },
+    { "path": "../Base_Core" },
+    { "path": "../Devices" }
+  ],
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+      "name": "Reusable debug",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+	    "cwd": "${workspaceFolder:Office_Apps}",
+	    "env": { "PYTHONPATH": "${workspaceFolder:Office_Apps}" },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    } 
+    ]
+  },
+  "settings": {
+    "python.analysis.indexing": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.extraPaths": [
+      "${workspaceFolder:Base_Core}",
+      "${workspaceFolder:Devices}"
+    ],
+    "python.analysis.useLibraryCodeForTypes": true,
+    "python.analysis.packageIndexDepths": [
+      { "name": "base_core", "depth": 5, "includeAllSymbols": true },
+      { "name": "spm_002", "depth": 5, "includeAllSymbols": true },
+      { "name": "elliptec", "depth": 5, "includeAllSymbols": true }
+    ]
+  }
+}
