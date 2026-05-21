@@ -13,6 +13,9 @@ from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
 from scipy.stats import skewnorm
 from bisect import bisect_left
+import csv
+import random
+import math
 
 
 def read_photon_control_spectrum(filename):
@@ -145,7 +148,7 @@ def find_troughs(x, y, smooth_window, prominence):
     return x_min,y_min
 
 
-def fit_to_gaussian(x, y, smooth_window=20, prominence=0.5,skew=True,trough=True):
+def fit_to_gaussian(x, y, smooth_window=20, prominence=0.5,skew=False,trough=True):
     """
     Estimate bottom envelope of oscillatting signal using skewed gaussian fit
     on local minima
@@ -185,7 +188,7 @@ def fit_to_gaussian(x, y, smooth_window=20, prominence=0.5,skew=True,trough=True
         
         params, _ = curve_fit(gaussian, x_min, y_min, p0=p0, maxfev=10000)
 
-        envelope = gaussian(x, *params)
+        envelope = gaussian(x_min, *params)
         
     elif skew==True:
 
@@ -203,7 +206,7 @@ def fit_to_gaussian(x, y, smooth_window=20, prominence=0.5,skew=True,trough=True
         #fit
         params, _ = curve_fit(skew_gaussian, x_min, y_min, p0=p0, maxfev=10000)
     
-        envelope = skew_gaussian(x, *params)
+        envelope = skew_gaussian(x_min, *params)
 
     return envelope, params, x_min, y_min
 
@@ -227,7 +230,7 @@ def estimated_envelope_from_file(filename,plot=False):
     env, params, xm, ym = fit_to_gaussian(x,y)
 
     if plot==True:
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=(10, 6))
         plt.plot(x, y, label="Signal", alpha=0.5)
         plt.plot(x, env, color='fuchsia',label="Estimated bottom envelope", linewidth=2)
         plt.scatter(xm, ym, color="darkslateblue", s=10, label="Detected minima")
@@ -343,6 +346,52 @@ def avg_diff(x,y1,y2):
     
     return avg
 
+def generate_test_data():
+
+    #data parameters
+    wavelength_start = 740
+    wavelength_end = 860
+    num_points = 1000
+    baseline_intensity = 0
+    baseline_noise = 0.5
+    
+    #Gaussian peak parameters
+    gaussian_center = 795
+    gaussian_amplitude = 19
+    gaussian_sigma = 11
+    gaussian_noise = 1
+    
+    wavelengths = np.linspace(wavelength_start, wavelength_end, num_points)
+    
+    intensities = []
+    
+    for wl in wavelengths:
+
+        #Flat random baseline
+        baseline = baseline_intensity + random.uniform(
+                -baseline_noise,
+                baseline_noise
+            )
+    
+        #Gaussian peak
+        gaussian = gaussian_amplitude * math.exp(-((wl - gaussian_center) ** 2) / (2 * gaussian_sigma ** 2))
+    
+        #Add Gaussian noise
+        gaussian += random.uniform(
+                -gaussian_noise,
+                gaussian_noise)
+    
+        intensity = baseline + gaussian
+    
+            
+        intensities.append(round(intensity,6))
+            
+        lam_array=np.array(wavelengths)
+        ints_array=np.array(intensities)
+            
+        
+    return lam_array,ints_array
+
 def avg_diff_spectrum_data(file_osc,file_cent, use_fit=False, plot=False):
     """
     computes the average difference between two curves, does average because each data set is going 
@@ -361,10 +410,18 @@ def avg_diff_spectrum_data(file_osc,file_cent, use_fit=False, plot=False):
     None.
 
     """
-    x_osc,y_osc = plot_clean_data(file_osc,plot=False)
-    x_cent,y_cent = plot_clean_data(file_cent,plot=False)
     
+    #get data for centrifuge
+    if file_cent == "generate":
+        x_cent,y_cent=generate_test_data()
+    
+    else:
+        x_cent,y_cent = plot_clean_data(file_cent,plot=False)
 
+    #get data from oscillating signal
+    x_osc,y_osc = plot_clean_data(file_osc,plot=False)
+    
+    #fit to gaussian/find troughs
     env_osc, params_osc, xm_osc, ym_osc = fit_to_gaussian(x_osc,y_osc)
     env_cent, params_cent, xm_cent, ym_cent = fit_to_gaussian(x_cent,y_cent,trough=False)
         
@@ -377,33 +434,42 @@ def avg_diff_spectrum_data(file_osc,file_cent, use_fit=False, plot=False):
         y_osc_clean=ym_osc
         y_cent_clean=ym_cent
         
+        
+    #match data points
     x_cent_matched, y_cent_matched = match_dataset_by_x(xm_osc,y_osc_clean,xm_cent,y_cent_clean)
     
+    #plot
     if plot ==True:
         if use_fit== True:
-            plt.figure(figsize=(10,5))
-            plt.plot(xm_osc,env_osc,color='black',label='fitted trough data from oscillating dataset')
-            plt.plot(xm_cent,env_cent,color='red',label='fitted data from centrifuge')
+            plt.figure(figsize=(10,6))
+            plt.plot(xm_osc,env_osc,color='darkslateblue',label='fitted trough data from oscillating dataset')
+            plt.plot(xm_cent,env_cent,color='fuchsia',label='fitted data from centrifuge')
+            plt.fill_between(xm_osc,env_osc,y_cent_matched,color='royalblue', alpha=0.2,interpolate=True)
             plt.xlabel('Wavelength(nm)')
             plt.ylabel('Intensity arb.')
             plt.legend()
             plt.show()
         
         elif use_fit==False:
-            plt.figure(figsize=(10,5))
-            plt.scatter(xm_osc,ym_osc,color='black',label='trough data from oscillating dataset')
-            plt.scatter(xm_cent,ym_cent,color='red',label='data from centrifuge')
+            plt.figure(figsize=(10,6))
+            plt.scatter(xm_osc,ym_osc,color='darkslateblue',label='trough data from oscillating dataset')
+            plt.scatter(x_cent_matched,y_cent_matched,color='fuchsia',label='data from centrifuge')
+            plt.fill_between(xm_osc,y_cent_matched,ym_osc,color='royalblue', alpha=0.2)
             plt.xlabel('Wavelength(nm)')
             plt.ylabel('Intensity arb.')
+            plt.legend()
             plt.show()
             
     elif plot==False:
         pass
-        
+    
+    #return the average difference in the cleaned,matched data sets   
     return avg_diff(xm_osc,y_osc_clean,y_cent_matched)
 
 
-avg_diff_spectrum_data('test_data.xls','generated_spectrum.csv',plot=True)
+diff= avg_diff_spectrum_data('test_data.xls','generate',use_fit=True,plot=True)
+
+print('average difference between curves =', round(diff,3))
 
 
 
