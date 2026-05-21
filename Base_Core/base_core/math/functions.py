@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from math import factorial, pi
+from typing import Mapping, Sequence
+
+import numpy as np
+from scipy.special import lpmv
+
+from base_core.quantities.constants import SPEED_OF_LIGHT
+
+
+
+def gaussian(x: Sequence[float], A, x0, sigma, offset):
+    """
+    1D Gaussian with constant offset.
+    """
+    xs = np.array(x, dtype=float)
+    
+    return A * np.exp(-((xs - x0) ** 2) / (2 * sigma ** 2)) + offset
+
+#def erfc(x: Sequence[float], sigma, )
+
+def usCFG_projection(
+    wavelengths: Sequence[float],
+    carrier_wavelength: float,
+    starting_wavelength: float,
+    bandwidth: float,
+    baseline: float,
+    phase: float,
+    acceleration: float) -> list[float]:
+    wavelengths_np = np.array(wavelengths, dtype=float)
+    sigma = bandwidth / np.sqrt(8*np.log(2))
+    # maybe not square gaussian
+    return baseline + (1-baseline) * (gaussian(wavelengths, 1, carrier_wavelength, sigma, 0) * np.sin(phase + acceleration * (wavelengths_np - starting_wavelength)**2))**2
+
+def cfCFG_projection(
+#S = const +  (1-const)*(Gaussian(lambda - carrier,FWHM)*sin(phase + average*(lambda - carrier) + acceleration*(lambda - carrier)^3 )^2 )
+    wavelengths: Sequence[float],
+    carrier_wavelength: float,
+    average_frequency: float,
+    bandwidth: float,
+    baseline: float,
+    phase: float,
+    acceleration: float) -> list[float]:
+    wavelengths_np = np.array(wavelengths, dtype=float)
+    sigma = bandwidth / np.sqrt(8*np.log(2))
+    # maybe not square gaussian
+    return baseline + (1-baseline) * (gaussian(wavelengths, 1, carrier_wavelength, sigma, 0) * np.sin(phase + average_frequency*(wavelengths_np - carrier_wavelength) + acceleration * (wavelengths_np - carrier_wavelength)**3))**2
+
+def cfg_projection_nu_equal_amplitudes_safe(
+    wavelengths_nm: Sequence[float],
+    # envelope parameters (your gaussian in λ)
+    central_wavelength: float,
+    bandwidth: float,
+    # measurement/model parameters
+    baseline: float,
+    phase: float,
+    tau_ps: float,
+    a_R_THz_per_ps: float,
+    a_L_THz_per_ps: float,
+) -> np.ndarray:
+    """
+    Uses your Gaussian as INTENSITY envelope in λ.
+    Computes oscillation phase in ν-domain safely using THz/ps.
+    """
+    env_sigma_nm = bandwidth / np.sqrt(8*np.log(2))
+    lam_nm = np.asarray(wavelengths_nm, dtype=float)
+    baseline = float(np.clip(baseline, 0.0, 0.999999))
+
+    if a_R_THz_per_ps == 0.0 or a_L_THz_per_ps == 0.0:
+        raise ValueError("a_R_THz_per_ps and a_L_THz_per_ps must be nonzero.")
+
+    # Intensity envelope vs λ using your gaussian
+    I_env = gaussian(lam_nm, 1, central_wavelength, env_sigma_nm, 0)
+    I_env = np.clip(I_env, 0.0, None)  # avoid negative intensities
+
+    # ν in THz (Fourier variable)
+    nu_thz = (SPEED_OF_LIGHT / (lam_nm * 1e-9)) * 1e-12
+    nu0_thz = (SPEED_OF_LIGHT / (central_wavelength * 1e-9)) * 1e-12  # reference at envelope center
+    dnu_thz = nu_thz - nu0_thz
+
+    # Chirp spectral phases (linear chirp model, no TOD)
+    Phi_R = np.pi * (dnu_thz ** 2) / a_R_THz_per_ps
+    Phi_L = np.pi * (dnu_thz ** 2) / a_L_THz_per_ps
+
+    # Relative phase controlling the horizontal projection oscillation
+    DeltaPhi = (Phi_R - Phi_L) + 2.0 * np.pi * nu_thz * tau_ps + phase
+
+    modulation = 0.5 * (1.0 + np.cos(DeltaPhi))  # in [0,1]
+
+    I = baseline + (1.0 - baseline) * (I_env * modulation)
+    return I
+
+
+@dataclass(frozen=True, slots=True)
+class SphericalHarmonic:
+    """
+    Single spherical harmonic Y_l^m(theta, phi).
+
+    Convention:
+        theta = polar angle from +z axis
+        phi   = azimuth angle in xy plane
+
+    Uses the physics convention including the Condon-Shortley phase.
+    """
+
+    l: int
+    m: int
+
+    def __post_init__(self) -> None:
+        if self.l < 0:
+            raise ValueError("l must be >= 0")
+        if abs(self.m) > self.l:
+            raise ValueError("m must satisfy |m| <= l")
+
+    def __call__(self, theta, phi) -> np.ndarray:
+        theta = np.asarray(theta, dtype=np.float64)
+        phi = np.asarray(phi, dtype=np.float64)
+
+        if self.m >= 0:
+            return self._positive_m(self.l, self.m, theta, phi)
+
+        m_abs = abs(self.m)
+
+        # Y_l^{-m} = (-1)^m conj(Y_l^m)
+        return (-1) ** m_abs * np.conjugate(
+            self._positive_m(self.l, m_abs, theta, phi)
+        )
+
+    @staticmethod
+    def _positive_m(l: int, m: int, theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
+        norm = np.sqrt(
+            (2 * l + 1)
+            / (4 * pi)
+            * factorial(l - m)
+            / factorial(l + m)
+        )
+
+        return norm * lpmv(m, l, np.cos(theta)) * np.exp(1j * m * phi)
